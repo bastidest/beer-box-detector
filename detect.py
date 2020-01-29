@@ -30,8 +30,10 @@ def detect_straight_lines(img):
     return lines
 
 def detect_box(name, lines):
-    quadrants = seperate_lines(lines)
-    print_aligned_lines(name, quadrants)
+    alignments = align_lines(lines)
+    print_aligned_lines(name, alignments)
+    bounds = get_outer_bounds(alignments)
+    print_bounds(name, bounds)
 
 #   +-------+-------+            I 
 #   |       |       |        ----------
@@ -42,7 +44,10 @@ def detect_box(name, lines):
 #   |  IV   |  III  |      |            |   
 #   |       |       |       -----------     
 #   +-------+-------+           III         
-def seperate_lines(lines):
+# 
+#       quadrants            alignments
+#
+def align_lines(lines):
     ret = ([], [], [], [])
     for line in lines:
         line = line[0]
@@ -77,17 +82,34 @@ def get_line_alignment(quadrants):
         return 4
     return 0
 
-def print_aligned_lines(name, quadrants):
+def print_aligned_lines(name, alignments):
     empty = np.zeros((IMG_HEIGHT, IMG_WIDTH, 3), np.uint8)
-    for line in quadrants[0]:
+    for line in alignments[0]:
         cv2.line(empty, (line[0], line[1]), (line[2], line[3]), (0, 0, 255), 1, cv2.LINE_AA)
-    for line in quadrants[1]:
+    for line in alignments[1]:
         cv2.line(empty, (line[0], line[1]), (line[2], line[3]), (255, 0, 255), 1, cv2.LINE_AA)
-    for line in quadrants[2]:
+    for line in alignments[2]:
         cv2.line(empty, (line[0], line[1]), (line[2], line[3]), (0, 255, 255), 1, cv2.LINE_AA)
-    for line in quadrants[3]:
+    for line in alignments[3]:
         cv2.line(empty, (line[0], line[1]), (line[2], line[3]), (255, 255, 0), 1, cv2.LINE_AA)
     cv2.imshow(name, empty)
+
+def get_outer_bounds(alignments):
+    top = min(alignments[0], key=lambda e: (e[1] + e[3]) / 2, default=(0,0,0,0))
+    right = max(alignments[1], key=lambda e: (e[0] + e[2]) / 2, default=(0,0,0,0))
+    bottom = max(alignments[2], key=lambda e: (e[1] + e[3]) / 2, default=(0,0,0,0))
+    left = min(alignments[3], key=lambda e: (e[0] + e[2]) / 2, default=(0,0,0,0))
+    ret = (top, right, bottom, left)
+    return ret
+
+def print_bounds(name, bounds):
+    print_aligned_lines(name, (
+        [bounds[0]],
+        [bounds[1]],
+        [bounds[2]],
+        [bounds[3]],
+    ))
+
 
 paths = [
     './samples/kasten1.jpg',
