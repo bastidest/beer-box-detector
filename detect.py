@@ -17,7 +17,7 @@ def detect_straight_lines(img):
 
     # cdstP = cv2.cvtColor(traced, cv2.COLOR_GRAY2BGR)
 
-    lines = cv2.HoughLinesP(traced, rho = 1, theta = 1*np.pi/180, threshold = 70, minLineLength = 150, maxLineGap = 200)
+    lines = cv2.HoughLinesP(traced, rho = 1, theta = 1*np.pi/180, threshold = 50, minLineLength = 150, maxLineGap = 200)
 
     if lines is not None:
         for i in range(0, len(lines)):
@@ -29,11 +29,15 @@ def detect_straight_lines(img):
     cv2.imshow(path, imstack)
     return lines
 
-def detect_box(name, lines):
+def detect_box(name, resized, lines):
     alignments = align_lines(lines)
-    print_aligned_lines(name, alignments)
     bounds = get_outer_bounds(alignments)
-    print_bounds(name, bounds)
+    
+    # print_aligned_lines(canvas, alignments)
+    canvas = np.copy(resized)
+    print_bounds(canvas, bounds)
+    cv2.imshow(name, np.hstack((resized, canvas)))
+    
 
 #   +-------+-------+            I 
 #   |       |       |        ----------
@@ -82,17 +86,15 @@ def get_line_alignment(quadrants):
         return 4
     return 0
 
-def print_aligned_lines(name, alignments):
-    empty = np.zeros((IMG_HEIGHT, IMG_WIDTH, 3), np.uint8)
+def print_aligned_lines(canvas, alignments, width=1):
     for line in alignments[0]:
-        cv2.line(empty, (line[0], line[1]), (line[2], line[3]), (0, 0, 255), 1, cv2.LINE_AA)
+        cv2.line(canvas, (line[0], line[1]), (line[2], line[3]), (0, 0, 255), width, cv2.LINE_AA)
     for line in alignments[1]:
-        cv2.line(empty, (line[0], line[1]), (line[2], line[3]), (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.line(canvas, (line[0], line[1]), (line[2], line[3]), (255, 0, 255), width, cv2.LINE_AA)
     for line in alignments[2]:
-        cv2.line(empty, (line[0], line[1]), (line[2], line[3]), (0, 255, 255), 1, cv2.LINE_AA)
+        cv2.line(canvas, (line[0], line[1]), (line[2], line[3]), (0, 255, 255), width, cv2.LINE_AA)
     for line in alignments[3]:
-        cv2.line(empty, (line[0], line[1]), (line[2], line[3]), (255, 255, 0), 1, cv2.LINE_AA)
-    cv2.imshow(name, empty)
+        cv2.line(canvas, (line[0], line[1]), (line[2], line[3]), (255, 255, 0), width, cv2.LINE_AA)
 
 def get_outer_bounds(alignments):
     top = min(alignments[0], key=lambda e: (e[1] + e[3]) / 2, default=(0,0,0,0))
@@ -102,14 +104,16 @@ def get_outer_bounds(alignments):
     ret = (top, right, bottom, left)
     return ret
 
-def print_bounds(name, bounds):
-    print_aligned_lines(name, (
+def print_bounds(canvas, bounds):
+    print_aligned_lines(canvas, (
         [bounds[0]],
         [bounds[1]],
         [bounds[2]],
         [bounds[3]],
-    ))
+    ), 3)
 
+def create_empty_canvas():
+    return np.zeros((IMG_HEIGHT, IMG_WIDTH, 3), np.uint8)
 
 paths = [
     './samples/kasten1.jpg',
@@ -124,6 +128,6 @@ for path in paths:
     print(path)
     resized = get_small_img(path)
     lines = detect_straight_lines(resized)
-    shape = detect_box(path, lines)
+    shape = detect_box(path, resized, lines)
 
 cv2.waitKey()
