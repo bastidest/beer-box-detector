@@ -19,23 +19,25 @@ def detect_straight_lines(img):
 
     lines = cv2.HoughLinesP(traced, rho = 1, theta = 1*np.pi/180, threshold = 50, minLineLength = 150, maxLineGap = 200)
 
-    if lines is not None:
-        for i in range(0, len(lines)):
-            l = lines[i][0]
-            cv2.line(img, (l[0], l[1]), (l[2], l[3]), (0,0,255), 1, cv2.LINE_AA)
+    # if lines is not None:
+    #     for i in range(0, len(lines)):
+    #         l = lines[i][0]
+    #         cv2.line(img, (l[0], l[1]), (l[2], l[3]), (0,0,255), 1, cv2.LINE_AA)
 
-    tracedrgb = cv2.cvtColor(traced, cv2.COLOR_GRAY2BGR)
-    imstack = np.hstack((img, tracedrgb))
-    cv2.imshow(path, imstack)
+    # tracedrgb = cv2.cvtColor(traced, cv2.COLOR_GRAY2BGR)
+    # imstack = np.hstack((img, tracedrgb))
+    # cv2.imshow(path, imstack)
     return lines
 
 def detect_box(name, resized, lines):
     alignments = align_lines(lines)
     bounds = get_outer_bounds(alignments)
+    box = outer_bounds_to_box(bounds)
     
-    # print_aligned_lines(canvas, alignments)
     canvas = np.copy(resized)
-    print_bounds(canvas, bounds)
+    # print_aligned_lines(canvas, alignments)
+    # print_bounds(canvas, bounds)
+    print_polygon(canvas, box)
     cv2.imshow(name, np.hstack((resized, canvas)))
     
 
@@ -104,6 +106,16 @@ def get_outer_bounds(alignments):
     ret = (top, right, bottom, left)
     return ret
 
+def outer_bounds_to_box(bounds):
+    incomplete_box = any(el is (0,0,0,0) for el in bounds)
+    if incomplete_box:
+        return None
+    top_left = get_intersect_helper(bounds[3], bounds[0])
+    top_right = get_intersect_helper(bounds[0], bounds[1])
+    bottom_right = get_intersect_helper(bounds[1], bounds[2])
+    bottom_left = get_intersect_helper(bounds[2], bounds[3])
+    return (top_left, top_right, bottom_right, bottom_left)
+
 def print_bounds(canvas, bounds):
     print_aligned_lines(canvas, (
         [bounds[0]],
@@ -112,8 +124,32 @@ def print_bounds(canvas, bounds):
         [bounds[3]],
     ), 3)
 
+def print_polygon(canvas, points):
+    points = np.array(points, np.int32)
+    cv2.polylines(canvas, [points], True, (0, 255, 255))
+
 def create_empty_canvas():
     return np.zeros((IMG_HEIGHT, IMG_WIDTH, 3), np.uint8)
+
+def get_intersect_helper(a, b):
+    return get_intersect((a[0], a[1]), (a[2], a[3]), (b[0], b[1]), (b[2], b[3]))
+
+def get_intersect(a1, a2, b1, b2):
+    """ 
+    Returns the point of intersection of the lines passing through a2,a1 and b2,b1.
+    a1: [x, y] a point on the first line
+    a2: [x, y] another point on the first line
+    b1: [x, y] a point on the second line
+    b2: [x, y] another point on the second line
+    """
+    s = np.vstack([a1,a2,b1,b2])        # s for stacked
+    h = np.hstack((s, np.ones((4, 1)))) # h for homogeneous
+    l1 = np.cross(h[0], h[1])           # get first line
+    l2 = np.cross(h[2], h[3])           # get second line
+    x, y, z = np.cross(l1, l2)          # point of intersection
+    if z == 0:                          # lines are parallel
+        return (float('inf'), float('inf'))
+    return (x/z, y/z)
 
 paths = [
     './samples/kasten1.jpg',
