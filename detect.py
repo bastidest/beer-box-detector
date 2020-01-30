@@ -5,6 +5,8 @@ IMG_WIDTH = 400
 IMG_HEIGHT = 300
 NR_BOTTLES_WIDE = 5
 NR_BOTTLES_NARROW = 4
+PADDING_WIDE = 0.05
+PADDING_NARROW = 0.032
 
 def get_small_img(path):
     img = cv2.imread(path)
@@ -167,28 +169,35 @@ def get_intersect(a1, a2, b1, b2):
 #
 def get_cap_positions(name, resized, shape):
     # check which direction is wide and which is narrow
-    dist_i_ii = np.linalg.norm(np.subtract(shape[0], shape[1]))
-    dist_i_iv = np.linalg.norm(np.subtract(shape[0], shape[3]))
+    i_ii = np.subtract(shape[1], shape[0])
+    dist_i_ii = np.linalg.norm(i_ii)
+    i_iv = np.subtract(shape[3], shape[0])
+    dist_i_iv = np.linalg.norm(i_iv)
+    
     if dist_i_ii > dist_i_iv:
+        padding_long = PADDING_WIDE * i_ii
+        padding_short = PADDING_NARROW * i_iv
         long_1 = (shape[0], shape[1]) # top
         long_2 = (shape[3], shape[2]) # bottom
         short_1 = (shape[0], shape[3]) # left
         short_2 = (shape[1], shape[2]) # right
     else:
+        padding_long = PADDING_WIDE * i_iv
+        padding_short = PADDING_NARROW * i_ii
         short_1 = (shape[0], shape[1]) # top
         short_2 = (shape[3], shape[2]) # bottom
         long_1 = (shape[0], shape[3]) # left
         long_2 = (shape[1], shape[2]) # right
 
     # calculate the horizontal and vertical lines
-    a = np.asarray(long_1[0])
-    b = np.asarray(long_1[1])
-    e = np.asarray(long_2[0])
-    f = np.asarray(long_2[1])
-    c = np.asarray(short_1[0])
-    d = np.asarray(short_1[1])
-    g = np.asarray(short_2[0])
-    h = np.asarray(short_2[1])
+    a = np.asarray(long_1[0]) + padding_long
+    b = np.asarray(long_1[1]) - padding_long
+    e = np.asarray(long_2[0]) + padding_long
+    f = np.asarray(long_2[1]) - padding_long
+    c = np.asarray(short_1[0]) + padding_short
+    d = np.asarray(short_1[1]) - padding_short
+    g = np.asarray(short_2[0]) + padding_short
+    h = np.asarray(short_2[1]) - padding_short
     
     canvas = np.copy(resized)
     
@@ -212,12 +221,12 @@ def a2t(np_array):
     return (int(np_array[0]), int(np_array[1]))
 
 paths = [
-    # './samples/kasten1.jpg',
+    './samples/kasten1.jpg',
     './samples/kasten2.jpg',
-    # './samples/kasten3.jpg',
-    # './samples/kasten4.jpg',
-    # './samples/kasten5.jpg',
-    # './samples/kasten6.jpg',
+    './samples/kasten3.jpg',
+    './samples/kasten4.jpg',
+    './samples/kasten5.jpg',
+    './samples/kasten6.jpg',
 ]
 
 for path in paths:
