@@ -3,6 +3,8 @@ import numpy as np
 
 IMG_WIDTH = 400
 IMG_HEIGHT = 300
+NR_BOTTLES_WIDE = 5
+NR_BOTTLES_NARROW = 4
 
 def get_small_img(path):
     img = cv2.imread(path)
@@ -34,11 +36,13 @@ def detect_box(name, resized, lines):
     bounds = get_outer_bounds(alignments)
     box = outer_bounds_to_box(bounds)
     
-    canvas = np.copy(resized)
-    # print_aligned_lines(canvas, alignments)
-    # print_bounds(canvas, bounds)
-    print_polygon(canvas, box)
-    cv2.imshow(name, np.hstack((resized, canvas)))
+    # canvas = np.copy(resized)
+    # # print_aligned_lines(canvas, alignments)
+    # # print_bounds(canvas, bounds)
+    # print_polygon(canvas, box)
+    # cv2.imshow(name, np.hstack((resized, canvas)))
+
+    return box
     
 
 #   +-------+-------+            I 
@@ -151,13 +155,69 @@ def get_intersect(a1, a2, b1, b2):
         return (float('inf'), float('inf'))
     return (x/z, y/z)
 
+
+#
+#      a0 1 2 3 4b 
+#     c+-+-+-+-+-+g       n \in [0;4]
+#      +-+-+-+-+-+        a_n = a + (b-a)/5 * (n + 0.5)
+#      +-+-+-+-+-+ 
+#      +-+-+-+-+-+        n \in [0;3]
+#     d+-+-+-+-+-+h       c_n = c + (d-c)/4 * (n + 0.5)
+#      e         f
+#
+def get_cap_positions(name, resized, shape):
+    # check which direction is wide and which is narrow
+    dist_i_ii = np.linalg.norm(np.subtract(shape[0], shape[1]))
+    dist_i_iv = np.linalg.norm(np.subtract(shape[0], shape[3]))
+    if dist_i_ii > dist_i_iv:
+        long_1 = (shape[0], shape[1]) # top
+        long_2 = (shape[3], shape[2]) # bottom
+        short_1 = (shape[0], shape[3]) # left
+        short_2 = (shape[1], shape[2]) # right
+    else:
+        short_1 = (shape[0], shape[1]) # top
+        short_2 = (shape[3], shape[2]) # bottom
+        long_1 = (shape[0], shape[3]) # left
+        long_2 = (shape[1], shape[2]) # right
+
+    # calculate the horizontal and vertical lines
+    a = np.asarray(long_1[0])
+    b = np.asarray(long_1[1])
+    e = np.asarray(long_2[0])
+    f = np.asarray(long_2[1])
+    c = np.asarray(short_1[0])
+    d = np.asarray(short_1[1])
+    g = np.asarray(short_2[0])
+    h = np.asarray(short_2[1])
+    
+    canvas = np.copy(resized)
+    
+    narrow_lines = []
+    for n in range(0, NR_BOTTLES_WIDE):
+        point_1 = a + (b - a) / NR_BOTTLES_WIDE * (n + 0.5)
+        point_2 = e + (f - e) / NR_BOTTLES_WIDE * (n + 0.5)
+        narrow_lines.append((point_1, point_2))
+        cv2.line(canvas, a2t(point_1), a2t(point_2), (0,0,255), 1, cv2.LINE_AA)
+
+    wide_lines = []
+    for n in range(0, NR_BOTTLES_NARROW):
+        point_1 = c + (d - c) / NR_BOTTLES_NARROW * (n + 0.5)
+        point_2 = g + (h - g) / NR_BOTTLES_NARROW * (n + 0.5)
+        wide_lines.append((point_1, point_2))
+        cv2.line(canvas, a2t(point_1), a2t(point_2), (0,0,255), 1, cv2.LINE_AA)
+
+    cv2.imshow(name, np.hstack((resized, canvas)))
+
+def a2t(np_array):
+    return (int(np_array[0]), int(np_array[1]))
+
 paths = [
-    './samples/kasten1.jpg',
+    # './samples/kasten1.jpg',
     './samples/kasten2.jpg',
-    './samples/kasten3.jpg',
-    './samples/kasten4.jpg',
-    './samples/kasten5.jpg',
-    './samples/kasten6.jpg',
+    # './samples/kasten3.jpg',
+    # './samples/kasten4.jpg',
+    # './samples/kasten5.jpg',
+    # './samples/kasten6.jpg',
 ]
 
 for path in paths:
@@ -165,5 +225,6 @@ for path in paths:
     resized = get_small_img(path)
     lines = detect_straight_lines(resized)
     shape = detect_box(path, resized, lines)
+    cap_positions = get_cap_positions(path, resized, shape)
 
 cv2.waitKey()
