@@ -215,7 +215,18 @@ def get_cap_positions(name, resized, shape):
         wide_lines.append((point_1, point_2))
         cv2.line(canvas, a2t(point_1), a2t(point_2), (0,0,255), 1, cv2.LINE_AA)
 
+
+    # found wide and narrow lines, now we need to calculate all
+    # intersection point to get the bottle cap positions
+    cap_positions = []
+    for l1 in narrow_lines:
+        for l2 in wide_lines:
+            intersection_point = get_intersect(l1[0], l1[1], l2[0], l2[1])
+            cap_positions.append(intersection_point)
+            cv2.circle(canvas, a2t(intersection_point), 12, (0, 255, 255), thickness=2)
+            
     cv2.imshow(name, np.hstack((resized, canvas)))
+    return cap_positions
 
 def a2t(np_array):
     return (int(np_array[0]), int(np_array[1]))
