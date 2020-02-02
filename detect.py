@@ -1,48 +1,71 @@
+import math
 import cv2
 import numpy as np
 
-IMG_WIDTH = 400
-IMG_HEIGHT = 300
+IMG_WIDTH = 1600
+IMG_HEIGHT = 1200
 NR_BOTTLES_WIDE = 5
 NR_BOTTLES_NARROW = 4
 PADDING_WIDE = 0.05
 PADDING_NARROW = 0.032
+DEFAULT_LINE_WIDTH = 3
+BOTTLE_CAP_WIDE_FACTOR = 0.03
+BOTTLE_CAP_NARROW_FACTOR = 0.05
+
+PARAM_CANNY_THRESHOLD = 60
+PARAM_CANNY_THRESHOLD = 30
+PARAM_GAUSSIAN_BLUR = 2.5
 
 def get_small_img(path):
     img = cv2.imread(path)
     return cv2.resize(img, (IMG_WIDTH, IMG_HEIGHT), interpolation = cv2.INTER_CUBIC)
     
 def detect_straight_lines(img):
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    _,thresh = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY_INV)
-    blurred = cv2.blur(thresh, (11, 11))
+    blurred = cv2.GaussianBlur(img, (0,0), PARAM_GAUSSIAN_BLUR)
+    sobelx = np.absolute(cv2.Sobel(blurred,cv2.CV_32F,1,0,ksize=3)) / 255
+    sobely = np.absolute(cv2.Sobel(blurred,cv2.CV_32F,0,1,ksize=3)) / 255
+    mag_color, ang = cv2.cartToPolar(sobelx, sobely)
+    mag_color = mag_color * 255
+    mag_color = mag_color.astype(np.uint8)
+    mag = mag_color
+    mag = cv2.cvtColor(mag, cv2.COLOR_BGR2GRAY)
 
-    traced = cv2.Canny(blurred, 50, 200, None, 3)
+    traced = cv2.Canny(mag, PARAM_CANNY_THRESHOLD, PARAM_CANNY_THRESHOLD, None, 3)
 
-    # cdstP = cv2.cvtColor(traced, cv2.COLOR_GRAY2BGR)
+    lines = cv2.HoughLines(traced, rho = 1, theta = 1*np.pi/180, threshold = 200)
+    ret = []
+    # Draw the lines
+    if lines is not None:
+        for i in range(0, len(lines)):
+            rho = lines[i][0][0]
+            theta = lines[i][0][1]
+            a = math.cos(theta)
+            b = math.sin(theta)
+            x0 = a * rho
+            y0 = b * rho
+            pt1 = (int(x0 + 1000*(-b)), int(y0 + 1000*(a)))
+            pt2 = (int(x0 - 1000*(-b)), int(y0 - 1000*(a)))
+            cv2.line(mag_color, pt1, pt2, (0,0,255), DEFAULT_LINE_WIDTH, cv2.LINE_AA)
+            ret.append([[pt1[0], pt1[1], pt2[0], pt2[1]]])
 
-    lines = cv2.HoughLinesP(traced, rho = 1, theta = 1*np.pi/180, threshold = 50, minLineLength = 150, maxLineGap = 200)
-
-    # if lines is not None:
-    #     for i in range(0, len(lines)):
-    #         l = lines[i][0]
-    #         cv2.line(img, (l[0], l[1]), (l[2], l[3]), (0,0,255), 1, cv2.LINE_AA)
-
-    # tracedrgb = cv2.cvtColor(traced, cv2.COLOR_GRAY2BGR)
-    # imstack = np.hstack((img, tracedrgb))
-    # cv2.imshow(path, imstack)
-    return lines
+    show_pictures(path, [img, mag_color])
+    return ret
 
 def detect_box(name, resized, lines):
+    canvas = np.copy(resized)
+    
     alignments = align_lines(lines)
+    # print_aligned_lines(canvas, alignments)
+    
     bounds = get_outer_bounds(alignments)
+    if (0, 0, 0, 0) in bounds:
+        print_bounds(canvas, bounds)
+        return None
+    
     box = outer_bounds_to_box(bounds)
     
-    # canvas = np.copy(resized)
-    # # print_aligned_lines(canvas, alignments)
-    # # print_bounds(canvas, bounds)
-    # print_polygon(canvas, box)
-    # cv2.imshow(name, np.hstack((resized, canvas)))
+    print_polygon(canvas, box)
+    show_pictures(name, [resized, canvas])
 
     return box
     
@@ -94,7 +117,7 @@ def get_line_alignment(quadrants):
         return 4
     return 0
 
-def print_aligned_lines(canvas, alignments, width=1):
+def print_aligned_lines(canvas, alignments, width=DEFAULT_LINE_WIDTH):
     for line in alignments[0]:
         cv2.line(canvas, (line[0], line[1]), (line[2], line[3]), (0, 0, 255), width, cv2.LINE_AA)
     for line in alignments[1]:
@@ -105,17 +128,14 @@ def print_aligned_lines(canvas, alignments, width=1):
         cv2.line(canvas, (line[0], line[1]), (line[2], line[3]), (255, 255, 0), width, cv2.LINE_AA)
 
 def get_outer_bounds(alignments):
-    top = min(alignments[0], key=lambda e: (e[1] + e[3]) / 2, default=(0,0,0,0))
-    right = max(alignments[1], key=lambda e: (e[0] + e[2]) / 2, default=(0,0,0,0))
-    bottom = max(alignments[2], key=lambda e: (e[1] + e[3]) / 2, default=(0,0,0,0))
-    left = min(alignments[3], key=lambda e: (e[0] + e[2]) / 2, default=(0,0,0,0))
+    top = min(alignments[0], key=lambda e: (max(e[1], 0) + max(e[3], 0)) / 2, default=(0,0,0,0))
+    right = max(alignments[1], key=lambda e: (max(e[0], 0) + max(e[2], 0)) / 2, default=(0,0,0,0))
+    bottom = max(alignments[2], key=lambda e: (max(e[1], 0) + max(e[3], 0)) / 2, default=(0,0,0,0))
+    left = min(alignments[3], key=lambda e: (max(e[0], 0) + max(e[2], 0)) / 2, default=(0,0,0,0))
     ret = (top, right, bottom, left)
     return ret
 
 def outer_bounds_to_box(bounds):
-    incomplete_box = any(el is (0,0,0,0) for el in bounds)
-    if incomplete_box:
-        return None
     top_left = get_intersect_helper(bounds[3], bounds[0])
     top_right = get_intersect_helper(bounds[0], bounds[1])
     bottom_right = get_intersect_helper(bounds[1], bounds[2])
@@ -128,11 +148,11 @@ def print_bounds(canvas, bounds):
         [bounds[1]],
         [bounds[2]],
         [bounds[3]],
-    ), 3)
+    ), DEFAULT_LINE_WIDTH)
 
 def print_polygon(canvas, points):
     points = np.array(points, np.int32)
-    cv2.polylines(canvas, [points], True, (0, 255, 255))
+    cv2.polylines(canvas, [points], True, (0, 255, 255), thickness=DEFAULT_LINE_WIDTH)
 
 def create_empty_canvas():
     return np.zeros((IMG_HEIGHT, IMG_WIDTH, 3), np.uint8)
@@ -173,6 +193,13 @@ def get_cap_positions(name, resized, shape):
     dist_i_ii = np.linalg.norm(i_ii)
     i_iv = np.subtract(shape[3], shape[0])
     dist_i_iv = np.linalg.norm(i_iv)
+
+    # # calculate the other lengths in order to build a scale factor for
+    # # the bottle caps
+    # iv_iii = np.subtract(shape[2], shape[3])
+    # dist_iv_iii = np.linalg.norm(iv_iii)
+    # ii_iii = np.subtract(shape[2], shape[1])
+    # dist_ii_iii = np.linalg.norm(ii_iii)
     
     if dist_i_ii > dist_i_iv:
         padding_long = PADDING_WIDE * i_ii
@@ -206,14 +233,14 @@ def get_cap_positions(name, resized, shape):
         point_1 = a + (b - a) / NR_BOTTLES_WIDE * (n + 0.5)
         point_2 = e + (f - e) / NR_BOTTLES_WIDE * (n + 0.5)
         narrow_lines.append((point_1, point_2))
-        cv2.line(canvas, a2t(point_1), a2t(point_2), (0,0,255), 1, cv2.LINE_AA)
+        cv2.line(canvas, a2t(point_1), a2t(point_2), (0,0,255), DEFAULT_LINE_WIDTH, cv2.LINE_AA)
 
     wide_lines = []
     for n in range(0, NR_BOTTLES_NARROW):
         point_1 = c + (d - c) / NR_BOTTLES_NARROW * (n + 0.5)
         point_2 = g + (h - g) / NR_BOTTLES_NARROW * (n + 0.5)
         wide_lines.append((point_1, point_2))
-        cv2.line(canvas, a2t(point_1), a2t(point_2), (0,0,255), 1, cv2.LINE_AA)
+        cv2.line(canvas, a2t(point_1), a2t(point_2), (0,0,255), DEFAULT_LINE_WIDTH, cv2.LINE_AA)
 
 
     # found wide and narrow lines, now we need to calculate all
@@ -222,22 +249,41 @@ def get_cap_positions(name, resized, shape):
     for l1 in narrow_lines:
         for l2 in wide_lines:
             intersection_point = get_intersect(l1[0], l1[1], l2[0], l2[1])
-            cap_positions.append(intersection_point)
-            cv2.circle(canvas, a2t(intersection_point), 12, (0, 255, 255), thickness=2)
+            scale_narrow = get_line_length(l1[0], l1[1]) * BOTTLE_CAP_NARROW_FACTOR
+            scale_wide = get_line_length(l2[0], l2[1]) * BOTTLE_CAP_WIDE_FACTOR
+            cap_positions.append((intersection_point, scale_narrow, scale_wide))
+            cv2.circle(canvas, a2t(intersection_point), int(scale_narrow), (0, 255, 255), thickness=DEFAULT_LINE_WIDTH)
             
-    cv2.imshow(name, np.hstack((resized, canvas)))
+    show_pictures(name, [resized, canvas])
     return cap_positions
 
 def a2t(np_array):
     return (int(np_array[0]), int(np_array[1]))
 
+def get_line_length(a, b):
+    diff = np.subtract(b, a)
+    return np.linalg.norm(diff)
+
+def show_pictures(name, images):
+    stack = []
+    for i in images:
+        img = cv2.resize(i, (400, 300), interpolation = cv2.INTER_CUBIC)
+        stack.append(img)
+    stacked = np.hstack(stack)
+    cv2.imshow(name, stacked)
+
 paths = [
-    './samples/kasten1.jpg',
-    './samples/kasten2.jpg',
-    './samples/kasten3.jpg',
-    './samples/kasten4.jpg',
-    './samples/kasten5.jpg',
-    './samples/kasten6.jpg',
+    # './samples/kasten1.jpg',
+    # './samples/kasten2.jpg',
+    # './samples/kasten3.jpg',
+    # './samples/kasten4.jpg',
+    # './samples/kasten5.jpg',
+    # './samples/kasten6.jpg',
+    './samples/example_001.jpg',
+    './samples/example_002.jpg',
+    './samples/example_003.jpg',
+    './samples/example_004.jpg',
+    './samples/example_011.jpg',
 ]
 
 for path in paths:
@@ -245,6 +291,9 @@ for path in paths:
     resized = get_small_img(path)
     lines = detect_straight_lines(resized)
     shape = detect_box(path, resized, lines)
+    if shape == None:
+        print('Box not found in picture')
+        continue
     cap_positions = get_cap_positions(path, resized, shape)
 
 cv2.waitKey()
