@@ -19,7 +19,7 @@ class ImageDouble(Structure):
 
 class ELSDcWrapper:
     def __init__(self):
-        self.libELSDc = cdll.LoadLibrary("./lib")
+        self.libELSDc = cdll.LoadLibrary("./libELSDc")
         self.libELSDc.new_PImageDouble_ini.restype = POINTER(ImageDouble)
         self.libELSDc.new_PImageInt_ini.restype = POINTER(ImageInt)
     
@@ -64,7 +64,7 @@ test_w = 400
 test_h = 300
 
 test = ELSDcWrapper()
-img = cv2.imread('/home/sh/projects/beer-box-detector/samples/example_005.jpg')
+img = cv2.imread('./samples/example_005.jpg')
 img = cv2.resize(img, (test_w, test_h), interpolation = cv2.INTER_CUBIC)
 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
