@@ -1,0 +1,3 @@
+[submodule "ELSDc"]
+	path = ELSDc
+	url = https://github.com/viorik/ELSDc.git
