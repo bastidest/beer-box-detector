@@ -1,20 +1,32 @@
 import math
 import cv2
 import numpy as np
+from elsdc import ELSDcWrapper
 
-IMG_WIDTH = 1600
-IMG_HEIGHT = 1200
+# fixed parameters
+IMG_WIDTH = 640
+IMG_HEIGHT = 480
+
+# beer box specific parameters
 NR_BOTTLES_WIDE = 5
 NR_BOTTLES_NARROW = 4
 PADDING_WIDE = 0.05
 PADDING_NARROW = 0.032
-DEFAULT_LINE_WIDTH = 3
-BOTTLE_CAP_WIDE_FACTOR = 0.03
+BOTTLE_CAP_WIDE_FACTOR = 0.033
 BOTTLE_CAP_NARROW_FACTOR = 0.05
 
-PARAM_CANNY_THRESHOLD = 60
-PARAM_CANNY_THRESHOLD = 30
+# graphical output parameters
+DEFAULT_LINE_WIDTH = 2
+
+# parameters for line / box detection
+PARAM_CANNY_THRESHOLD = 120
 PARAM_GAUSSIAN_BLUR = 2.5
+PARAM_HOUGH_THRESHOLD = 100
+PARAM_HOUGH_RHO = 1
+PARAM_HOUGH_THETA = 1 * np.pi / 180
+
+# parameters for bottle cap detection
+PARAM_BOTTLE_CAP_SIZE_TOLERANCE = 0.2
 
 def get_small_img(path):
     img = cv2.imread(path)
@@ -32,7 +44,7 @@ def detect_straight_lines(img):
 
     traced = cv2.Canny(mag, PARAM_CANNY_THRESHOLD, PARAM_CANNY_THRESHOLD, None, 3)
 
-    lines = cv2.HoughLines(traced, rho = 1, theta = 1*np.pi/180, threshold = 200)
+    lines = cv2.HoughLines(traced, rho = PARAM_HOUGH_RHO, theta = PARAM_HOUGH_THETA, threshold = PARAM_HOUGH_THRESHOLD)
     ret = []
     # Draw the lines
     if lines is not None:
@@ -65,7 +77,7 @@ def detect_box(name, resized, lines):
     box = outer_bounds_to_box(bounds)
     
     print_polygon(canvas, box)
-    show_pictures(name, [resized, canvas])
+    # show_pictures(name, [resized, canvas])
 
     return box
     
@@ -272,28 +284,68 @@ def show_pictures(name, images):
     stacked = np.hstack(stack)
     cv2.imshow(name, stacked)
 
-paths = [
-    # './samples/kasten1.jpg',
-    # './samples/kasten2.jpg',
-    # './samples/kasten3.jpg',
-    # './samples/kasten4.jpg',
-    # './samples/kasten5.jpg',
-    # './samples/kasten6.jpg',
-    './samples/example_001.jpg',
-    './samples/example_002.jpg',
-    './samples/example_003.jpg',
-    './samples/example_004.jpg',
-    './samples/example_011.jpg',
-]
+def get_cap_count(name, resized, cap_positions, elsdc):
+    gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+    img, ellipses = elsdc.execute(IMG_WIDTH, IMG_HEIGHT, gray)
 
-for path in paths:
-    print(path)
-    resized = get_small_img(path)
-    lines = detect_straight_lines(resized)
-    shape = detect_box(path, resized, lines)
-    if shape == None:
-        print('Box not found in picture')
-        continue
-    cap_positions = get_cap_positions(path, resized, shape)
+    # get the average bottle cap sizes
+    avg_width = sum(map(lambda bc: bc[1], cap_positions)) / len(cap_positions)
+    avg_height = sum(map(lambda bc: bc[2], cap_positions)) / len(cap_positions)
+    avg_diameter = (avg_width + avg_height) / 2
 
-cv2.waitKey()
+    tol_down = (1 - PARAM_BOTTLE_CAP_SIZE_TOLERANCE)
+    tol_up = (1 + PARAM_BOTTLE_CAP_SIZE_TOLERANCE)
+
+    def filter_e(e):
+        stretch_factor = abs(1 - (e.width / e.height))
+        # if e.degrees < np.pi / 2:
+        #     return False
+        if stretch_factor > 0.2:
+            return False
+        if e.width < tol_down * avg_diameter or e.height < tol_down * avg_diameter:
+            return False
+        if e.width > tol_up * avg_diameter or e.height > tol_up * avg_diameter:
+            return False
+        return True
+
+    # filter ellipses for obvious criteria
+    ellipses = filter(filter_e, ellipses)
+
+    for e in ellipses:
+        cv2.circle(resized, a2t(e.center), int(e.height), (255, 0, 255), thickness=DEFAULT_LINE_WIDTH)
+
+    show_pictures(name, [resized])
+    # for pos in cap_positions:
+    #     x = pos[0][0]
+    #     y = pos[0][1]
+    #     for e in ellipses:
+            
+
+if __name__ == "__main__":
+    elsdc = ELSDcWrapper()
+    paths = [
+        # './samples/kasten1.jpg',
+        # './samples/kasten2.jpg',
+        # './samples/kasten3.jpg',
+        # './samples/kasten4.jpg',
+        # './samples/kasten5.jpg',
+        # './samples/kasten6.jpg',
+        './samples/example_001.jpg',
+        # './samples/example_002.jpg',
+        # './samples/example_003.jpg',
+        # './samples/example_004.jpg',
+        # './samples/example_011.jpg',
+    ]
+
+    for path in paths:
+        print(path)
+        resized = get_small_img(path)
+        lines = detect_straight_lines(resized)
+        shape = detect_box(path, resized, lines)
+        if shape == None:
+            print('Box not found in picture')
+            continue
+        cap_positions = get_cap_positions(path, resized, shape)
+        nr_caps = get_cap_count(path, resized, cap_positions, elsdc)
+
+    cv2.waitKey()

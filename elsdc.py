@@ -101,7 +101,7 @@ class ELSDcWrapper:
         # print("found %d ellipses and %d polygons" % (self.ell_count.value, self.poly_count.value))
 
         # copy the C array back to a np array
-        ret = np.zeros((test_h, test_w))
+        ret = np.zeros((height, width))
         for row in range(0, height):
             for col in range(0, width):
                  ret[row][col] = self.out_img[0].data[row * width + col]
@@ -122,29 +122,30 @@ class ELSDcWrapper:
         return ret, ellipses
 
 def a2t(np_array):
-    return (int(np_array[0]), int(np_array[1]))    
+    return (int(np_array[0]), int(np_array[1]))
 
-test_w = 400
-test_h = 300
+if __name__ == '__main__':
+    test_w = 400
+    test_h = 300
 
-test = ELSDcWrapper()
-img = cv2.imread('./samples/example_005.jpg')
-img = cv2.resize(img, (test_w, test_h), interpolation = cv2.INTER_CUBIC)
-gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    test = ELSDcWrapper()
+    img = cv2.imread('./samples/example_005.jpg')
+    img = cv2.resize(img, (test_w, test_h), interpolation = cv2.INTER_CUBIC)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-cv2.imshow('before', gray)
-returned, ellipses = test.execute(test_w, test_h, gray)
-returned = returned * 255
-returned = returned.astype(np.uint8)
-returned = cv2.cvtColor(returned, cv2.COLOR_GRAY2BGR)
-for e in ellipses:
-    stretch_factor = abs(1 - (e.width / e.height))
-    if stretch_factor > 0.2:
-        continue
-    if e.width > 16 or e.height > 16:
-        continue
-    cv2.circle(returned, a2t(e.center), int(e.height), (255, 0, 255), thickness=int(e.thickness * 10))
+    cv2.imshow('before', gray)
+    returned, ellipses = test.execute(test_w, test_h, gray)
+    returned = returned * 255
+    returned = returned.astype(np.uint8)
+    returned = cv2.cvtColor(returned, cv2.COLOR_GRAY2BGR)
+    for e in ellipses:
+        stretch_factor = abs(1 - (e.width / e.height))
+        if stretch_factor > 0.2:
+            continue
+        if e.width > 16 or e.height > 16:
+            continue
+        cv2.circle(returned, a2t(e.center), int(e.height), (255, 0, 255), thickness=int(e.thickness * 10))
 
-cv2.imshow('after', returned)
-cv2.waitKey()
+    cv2.imshow('after', returned)
+    cv2.waitKey()
 
