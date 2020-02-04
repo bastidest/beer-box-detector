@@ -22,6 +22,7 @@ def get_small_img(path):
     
 def detect_straight_lines(img):
     blurred = cv2.GaussianBlur(img, (0,0), PARAM_GAUSSIAN_BLUR)
+    laplacian = cv2.Laplacian(blurred, cv2.CV_64F, 3) 
     sobelx = np.absolute(cv2.Sobel(blurred,cv2.CV_32F,1,0,ksize=3)) / 255
     sobely = np.absolute(cv2.Sobel(blurred,cv2.CV_32F,0,1,ksize=3)) / 255
     mag_color, ang = cv2.cartToPolar(sobelx, sobely)
@@ -48,7 +49,7 @@ def detect_straight_lines(img):
             cv2.line(mag_color, pt1, pt2, (0,0,255), DEFAULT_LINE_WIDTH, cv2.LINE_AA)
             ret.append([[pt1[0], pt1[1], pt2[0], pt2[1]]])
 
-    show_pictures(path, [img, mag_color])
+    show_pictures(path, [img, laplacian])
     return ret
 
 def detect_box(name, resized, lines):
@@ -154,8 +155,10 @@ def print_polygon(canvas, points):
     points = np.array(points, np.int32)
     cv2.polylines(canvas, [points], True, (0, 255, 255), thickness=DEFAULT_LINE_WIDTH)
 
-def create_empty_canvas():
-    return np.zeros((IMG_HEIGHT, IMG_WIDTH, 3), np.uint8)
+def create_empty_canvas(channels=3):
+    if channels == 1:
+        return np.zeros((IMG_HEIGHT, IMG_WIDTH), np.uint8)
+    return np.zeros((IMG_HEIGHT, IMG_WIDTH, channels), np.uint8)
 
 def get_intersect_helper(a, b):
     return get_intersect((a[0], a[1]), (a[2], a[3]), (b[0], b[1]), (b[2], b[3]))
@@ -249,13 +252,33 @@ def get_cap_positions(name, resized, shape):
     for l1 in narrow_lines:
         for l2 in wide_lines:
             intersection_point = get_intersect(l1[0], l1[1], l2[0], l2[1])
-            scale_narrow = get_line_length(l1[0], l1[1]) * BOTTLE_CAP_NARROW_FACTOR
-            scale_wide = get_line_length(l2[0], l2[1]) * BOTTLE_CAP_WIDE_FACTOR
-            cap_positions.append((intersection_point, scale_narrow, scale_wide))
-            cv2.circle(canvas, a2t(intersection_point), int(scale_narrow), (0, 255, 255), thickness=DEFAULT_LINE_WIDTH)
+            cap_height = get_line_length(l1[0], l1[1]) * BOTTLE_CAP_NARROW_FACTOR
+            cap_width = get_line_length(l2[0], l2[1]) * BOTTLE_CAP_WIDE_FACTOR
+            cap_positions.append((intersection_point, cap_height, cap_width))
+            cv2.circle(canvas, a2t(intersection_point), int(cap_height), (0, 255, 255), thickness=DEFAULT_LINE_WIDTH)
             
     show_pictures(name, [resized, canvas])
     return cap_positions
+
+def get_cap_count(name, resized, cap_positions):
+    colorless = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+    _, thresholded = cv2.threshold(colorless,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    # thresholded = cv2.adaptiveThreshold(colorless, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
+    # thresholded = cv2.cvtColor(thresholded, cv2.COLOR_GRAY2BGR)
+    # show_pictures(name, [resized, thresholded])
+
+    count = 0
+    for pos, height, width in cap_positions:
+        cap_mask = create_empty_canvas(1)
+        # paint multiplier '1' as mask
+        cv2.circle(cap_mask, a2t(pos), int(height), (1), -1)
+        masked = np.multiply(thresholded, cap_mask)
+        percentage = np.sum(masked) / np.sum(cap_mask) / 255
+        if percentage > 0.5:
+            count += 1
+        show_pictures(name, [thresholded, masked])
+        
+    return count
 
 def a2t(np_array):
     return (int(np_array[0]), int(np_array[1]))
@@ -277,8 +300,8 @@ paths = [
     # './samples/kasten2.jpg',
     # './samples/kasten3.jpg',
     # './samples/kasten4.jpg',
-    # './samples/kasten5.jpg',
-    # './samples/kasten6.jpg',
+    './samples/kasten5.jpg',
+    './samples/kasten6.jpg',
     './samples/example_001.jpg',
     './samples/example_002.jpg',
     './samples/example_003.jpg',
@@ -295,5 +318,7 @@ for path in paths:
         print('Box not found in picture')
         continue
     cap_positions = get_cap_positions(path, resized, shape)
+    nr_bottles_full = get_cap_count(path, resized, cap_positions)
+    print(nr_bottles_full)
 
 cv2.waitKey()
