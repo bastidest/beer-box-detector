@@ -167,8 +167,10 @@ def print_polygon(canvas, points):
     points = np.array(points, np.int32)
     cv2.polylines(canvas, [points], True, (0, 255, 255), thickness=DEFAULT_LINE_WIDTH)
 
-def create_empty_canvas():
-    return np.zeros((IMG_HEIGHT, IMG_WIDTH, 3), np.uint8)
+def create_empty_canvas(channels=3):
+    if channels == 1:
+        return np.zeros((IMG_HEIGHT, IMG_WIDTH), np.uint8)
+    return np.zeros((IMG_HEIGHT, IMG_WIDTH, channels), np.uint8)
 
 def get_intersect_helper(a, b):
     return get_intersect((a[0], a[1]), (a[2], a[3]), (b[0], b[1]), (b[2], b[3]))
@@ -313,42 +315,47 @@ def get_cap_count(name, resized, cap_positions, elsdc):
     ellipses = list(filter(filter_e, ellipses))
 
             
-    for e in ellipses:
-        cv2.circle(resized, a2t(e.center), int(e.height), (255, 0, 255), thickness=DEFAULT_LINE_WIDTH)
-
-    count = 0
+    final_pos = []
     for cpos in cap_positions:
         expected = cpos[0]
         candidates = []
         for e in ellipses:
             dist_to_e = get_line_length(expected, e.center)
             if dist_to_e < PARAM_BOTTLE_DIST_TOLERANCE:
-                # print(e)
                 candidates.append((dist_to_e, e))
         found = min(candidates, key=lambda e: e[0], default=None)
         # print(found)
         if found is not None:
             cv2.circle(resized, a2t(found[1].center), int(e.height), (255, 0, 255), thickness=DEFAULT_LINE_WIDTH)
-            count += 1
+            final_pos.append(found[1])
+    
+    # for e in ellipses:
+    #     cv2.circle(resized, a2t(e.center), int(e.height), (255, 0, 255), thickness=DEFAULT_LINE_WIDTH)
 
-    show_pictures(name, [resized])
-    return count
+    colorless = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+    _, thresholded = cv2.threshold(colorless,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)            
+
+    not_good = 0
+    for e in final_pos:
+        cap_mask = create_empty_canvas(1)
+        # paint multiplier '1' as mask
+        cv2.circle(cap_mask, a2t(e.center), int(e.height), (1), -1)
+        masked = np.multiply(thresholded, cap_mask)
+        percentage = np.sum(masked) / np.sum(cap_mask) / 255
+        if percentage > 0.5:
+            # print('foo')
+            pass
+        else:
+            not_good += 1
+
+    thresholded = cv2.cvtColor(thresholded, cv2.COLOR_GRAY2BGR)
+    show_pictures(name, [resized, thresholded])
+    return len(final_pos) - not_good
             
 
 if __name__ == "__main__":
     elsdc = ELSDcWrapper()
     paths = [
-        # './samples/kasten1.jpg',
-        # './samples/kasten2.jpg',
-        # './samples/kasten3.jpg',
-        # './samples/kasten4.jpg',
-        # './samples/kasten5.jpg',
-        # './samples/kasten6.jpg',
-        # './samples/example_001.jpg',
-        # './samples/example_002.jpg',
-        # './samples/example_003.jpg',
-        # './samples/example_004.jpg',
-        # './samples/example_011.jpg',
         './samples/IMG_20200205_102944.jpg',
         './samples/IMG_20200205_102950.jpg',
         './samples/IMG_20200205_102956.jpg',
