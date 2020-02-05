@@ -10,7 +10,7 @@ IMG_HEIGHT = 480
 # beer box specific parameters
 NR_BOTTLES_WIDE = 5
 NR_BOTTLES_NARROW = 4
-PADDING_WIDE = 0.05
+PADDING_WIDE = 0.032
 PADDING_NARROW = 0.032
 BOTTLE_CAP_WIDE_FACTOR = 0.033
 BOTTLE_CAP_NARROW_FACTOR = 0.05
@@ -26,7 +26,8 @@ PARAM_HOUGH_RHO = 1
 PARAM_HOUGH_THETA = 1 * np.pi / 180
 
 # parameters for bottle cap detection
-PARAM_BOTTLE_CAP_SIZE_TOLERANCE = 0.2
+PARAM_BOTTLE_CAP_SIZE_TOLERANCE = 0.25
+PARAM_BOTTLE_DIST_TOLERANCE = 20.0
 
 def get_small_img(path):
     img = cv2.imread(path)
@@ -309,16 +310,29 @@ def get_cap_count(name, resized, cap_positions, elsdc):
         return True
 
     # filter ellipses for obvious criteria
-    ellipses = filter(filter_e, ellipses)
+    ellipses = list(filter(filter_e, ellipses))
 
+            
     for e in ellipses:
         cv2.circle(resized, a2t(e.center), int(e.height), (255, 0, 255), thickness=DEFAULT_LINE_WIDTH)
 
+    count = 0
+    for cpos in cap_positions:
+        expected = cpos[0]
+        candidates = []
+        for e in ellipses:
+            dist_to_e = get_line_length(expected, e.center)
+            if dist_to_e < PARAM_BOTTLE_DIST_TOLERANCE:
+                # print(e)
+                candidates.append((dist_to_e, e))
+        found = min(candidates, key=lambda e: e[0], default=None)
+        # print(found)
+        if found is not None:
+            cv2.circle(resized, a2t(found[1].center), int(e.height), (255, 0, 255), thickness=DEFAULT_LINE_WIDTH)
+            count += 1
+
     show_pictures(name, [resized])
-    # for pos in cap_positions:
-    #     x = pos[0][0]
-    #     y = pos[0][1]
-    #     for e in ellipses:
+    return count
             
 
 if __name__ == "__main__":
@@ -351,5 +365,6 @@ if __name__ == "__main__":
             continue
         cap_positions = get_cap_positions(path, resized, shape)
         nr_caps = get_cap_count(path, resized, cap_positions, elsdc)
+        print(nr_caps)
 
     cv2.waitKey()
