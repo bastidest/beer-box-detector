@@ -1,7 +1,12 @@
 import math
 import cv2
 import numpy as np
+import sys
 from elsdc import ELSDcWrapper
+from barrel_distortion import remove_barrel
+
+# toggle debugging output
+DEBUG = True
 
 # fixed parameters
 IMG_WIDTH = 640
@@ -29,9 +34,14 @@ PARAM_HOUGH_THETA = 1 * np.pi / 180
 PARAM_BOTTLE_CAP_SIZE_TOLERANCE = 0.25
 PARAM_BOTTLE_DIST_TOLERANCE = 30.0
 
+# parameters for removing barrel distortion
+PARAM_BARREL_DISTORTION = -1.0e-5
+PARAM_FOCAL_LENGTH = 7.
+
 def get_small_img(path):
     img = cv2.imread(path)
-    return cv2.resize(img, (IMG_WIDTH, IMG_HEIGHT), interpolation = cv2.INTER_CUBIC)
+    resized = cv2.resize(img, (IMG_WIDTH, IMG_HEIGHT), interpolation = cv2.INTER_CUBIC)
+    return remove_barrel(resized, PARAM_BARREL_DISTORTION, PARAM_FOCAL_LENGTH)
     
 def detect_straight_lines(img):
     blurred = cv2.GaussianBlur(img, (0,0), PARAM_GAUSSIAN_BLUR)
@@ -280,6 +290,8 @@ def get_line_length(a, b):
     return np.linalg.norm(diff)
 
 def show_pictures(name, images):
+    if not DEBUG:
+        return
     stack = []
     for i in images:
         img = cv2.resize(i, (400, 300), interpolation = cv2.INTER_CUBIC)
@@ -357,6 +369,20 @@ def get_cap_count(name, resized, cap_positions, elsdc):
 
 if __name__ == "__main__":
     elsdc = ELSDcWrapper()
+    if len(sys.argv) > 1:
+        path = sys.argv[1]
+        DEBUG = False
+        resized = get_small_img(path)
+        lines = detect_straight_lines(resized)
+        shape = detect_box(path, resized, lines)
+        if shape == None:
+            print('-1')
+            sys.exit(1)
+        cap_positions = get_cap_positions(path, resized, shape)
+        nr_caps = get_cap_count(path, resized, cap_positions, elsdc)
+        print(nr_caps)
+        sys.exit(0)
+    
     paths = [
         # './samples/IMG_20200205_102944.jpg',
         # './samples/IMG_20200205_102950.jpg',
@@ -365,6 +391,7 @@ if __name__ == "__main__":
         # './samples/example_002.jpg',
         './samples/file-2020-02-05 11:36:07.632.jpg',
         './samples/file-2020-02-05 11:38:27.497.jpg',
+        './samples/file-2020-02-05 11:36:42.476.jpg',
     ]
 
     for path in paths:
