@@ -129,7 +129,7 @@ if __name__ == '__main__':
     test_h = 300
 
     test = ELSDcWrapper()
-    img = cv2.imread('./samples/example_005.jpg')
+    img = cv2.imread('./samples/IMG_20200205_102944.jpg')
     img = cv2.resize(img, (test_w, test_h), interpolation = cv2.INTER_CUBIC)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
