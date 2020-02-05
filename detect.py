@@ -19,9 +19,9 @@ BOTTLE_CAP_NARROW_FACTOR = 0.05
 DEFAULT_LINE_WIDTH = 2
 
 # parameters for line / box detection
-PARAM_CANNY_THRESHOLD = 120
+PARAM_CANNY_THRESHOLD = 100
 PARAM_GAUSSIAN_BLUR = 2.5
-PARAM_HOUGH_THRESHOLD = 100
+PARAM_HOUGH_THRESHOLD = 130
 PARAM_HOUGH_RHO = 1
 PARAM_HOUGH_THETA = 1 * np.pi / 180
 
@@ -67,7 +67,7 @@ def detect_box(name, resized, lines):
     canvas = np.copy(resized)
     
     alignments = align_lines(lines)
-    # print_aligned_lines(canvas, alignments)
+    print_aligned_lines(canvas, alignments)
     
     bounds = get_outer_bounds(alignments)
     if (0, 0, 0, 0) in bounds:
@@ -77,7 +77,7 @@ def detect_box(name, resized, lines):
     box = outer_bounds_to_box(bounds)
     
     print_polygon(canvas, box)
-    # show_pictures(name, [resized, canvas])
+    show_pictures(name, [resized, canvas])
 
     return box
     
@@ -140,10 +140,10 @@ def print_aligned_lines(canvas, alignments, width=DEFAULT_LINE_WIDTH):
         cv2.line(canvas, (line[0], line[1]), (line[2], line[3]), (255, 255, 0), width, cv2.LINE_AA)
 
 def get_outer_bounds(alignments):
-    top = min(alignments[0], key=lambda e: (max(e[1], 0) + max(e[3], 0)) / 2, default=(0,0,0,0))
-    right = max(alignments[1], key=lambda e: (max(e[0], 0) + max(e[2], 0)) / 2, default=(0,0,0,0))
-    bottom = max(alignments[2], key=lambda e: (max(e[1], 0) + max(e[3], 0)) / 2, default=(0,0,0,0))
-    left = min(alignments[3], key=lambda e: (max(e[0], 0) + max(e[2], 0)) / 2, default=(0,0,0,0))
+    top = max(alignments[0], key=lambda e: (max(e[1], 0) + max(e[3], 0)) / 2, default=(0,0,0,0))
+    right = min(alignments[1], key=lambda e: (max(e[0], 0) + max(e[2], 0)) / 2, default=(0,0,0,0))
+    bottom = min(alignments[2], key=lambda e: (max(e[1], 0) + max(e[3], 0)) / 2, default=(0,0,0,0))
+    left = max(alignments[3], key=lambda e: (max(e[0], 0) + max(e[2], 0)) / 2, default=(0,0,0,0))
     ret = (top, right, bottom, left)
     return ret
 
@@ -330,11 +330,15 @@ if __name__ == "__main__":
         # './samples/kasten4.jpg',
         # './samples/kasten5.jpg',
         # './samples/kasten6.jpg',
-        './samples/example_001.jpg',
+        # './samples/example_001.jpg',
         # './samples/example_002.jpg',
         # './samples/example_003.jpg',
         # './samples/example_004.jpg',
         # './samples/example_011.jpg',
+        './samples/IMG_20200205_102944.jpg',
+        './samples/IMG_20200205_102950.jpg',
+        './samples/IMG_20200205_102956.jpg',
+        './samples/IMG_20200205_103002.jpg',
     ]
 
     for path in paths:
