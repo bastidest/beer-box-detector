@@ -19,7 +19,7 @@ BOTTLE_CAP_NARROW_FACTOR = 0.05
 DEFAULT_LINE_WIDTH = 2
 
 # parameters for line / box detection
-PARAM_CANNY_THRESHOLD = 100
+PARAM_CANNY_THRESHOLD = 70
 PARAM_GAUSSIAN_BLUR = 2.5
 PARAM_HOUGH_THRESHOLD = 130
 PARAM_HOUGH_RHO = 1
@@ -27,7 +27,7 @@ PARAM_HOUGH_THETA = 1 * np.pi / 180
 
 # parameters for bottle cap detection
 PARAM_BOTTLE_CAP_SIZE_TOLERANCE = 0.25
-PARAM_BOTTLE_DIST_TOLERANCE = 20.0
+PARAM_BOTTLE_DIST_TOLERANCE = 30.0
 
 def get_small_img(path):
     img = cv2.imread(path)
@@ -303,7 +303,7 @@ def get_cap_count(name, resized, cap_positions, elsdc):
         stretch_factor = abs(1 - (e.width / e.height))
         # if e.degrees < np.pi / 2:
         #     return False
-        if stretch_factor > 0.2:
+        if stretch_factor > 0.3:
             return False
         if e.width < tol_down * avg_diameter or e.height < tol_down * avg_diameter:
             return False
@@ -314,6 +314,7 @@ def get_cap_count(name, resized, cap_positions, elsdc):
     # filter ellipses for obvious criteria
     ellipses = list(filter(filter_e, ellipses))
 
+    draw_canvas = np.copy(resized)
             
     final_pos = []
     for cpos in cap_positions:
@@ -326,11 +327,12 @@ def get_cap_count(name, resized, cap_positions, elsdc):
         found = min(candidates, key=lambda e: e[0], default=None)
         # print(found)
         if found is not None:
-            cv2.circle(resized, a2t(found[1].center), int(e.height), (255, 0, 255), thickness=DEFAULT_LINE_WIDTH)
+            cv2.circle(draw_canvas, a2t(found[1].center), int(e.height), (255, 0, 255), thickness=DEFAULT_LINE_WIDTH)
             final_pos.append(found[1])
     
-    # for e in ellipses:
-    #     cv2.circle(resized, a2t(e.center), int(e.height), (255, 0, 255), thickness=DEFAULT_LINE_WIDTH)
+    for e in ellipses:
+        cv2.circle(draw_canvas, a2t(e.center), int(e.height), (255, 0, 255), thickness=DEFAULT_LINE_WIDTH)
+        pass
 
     colorless = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
     _, thresholded = cv2.threshold(colorless,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)            
@@ -349,17 +351,20 @@ def get_cap_count(name, resized, cap_positions, elsdc):
             not_good += 1
 
     thresholded = cv2.cvtColor(thresholded, cv2.COLOR_GRAY2BGR)
-    show_pictures(name, [resized, thresholded])
+    show_pictures(name, [draw_canvas, thresholded])
     return len(final_pos) - not_good
             
 
 if __name__ == "__main__":
     elsdc = ELSDcWrapper()
     paths = [
-        './samples/IMG_20200205_102944.jpg',
-        './samples/IMG_20200205_102950.jpg',
-        './samples/IMG_20200205_102956.jpg',
-        './samples/IMG_20200205_103002.jpg',
+        # './samples/IMG_20200205_102944.jpg',
+        # './samples/IMG_20200205_102950.jpg',
+        # './samples/IMG_20200205_102956.jpg',
+        # './samples/IMG_20200205_103002.jpg',
+        # './samples/example_002.jpg',
+        './samples/file-2020-02-05 11:36:07.632.jpg',
+        './samples/file-2020-02-05 11:38:27.497.jpg',
     ]
 
     for path in paths:
